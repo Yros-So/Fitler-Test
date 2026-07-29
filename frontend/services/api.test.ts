@@ -4,7 +4,7 @@ import { exportUrl } from "@/services/api";
 
 describe("exportUrl", () => {
   it("builds backend download endpoints", () => {
-    expect(exportUrl("csv")).toBe("http://localhost:8000/export/csv");
-    expect(exportUrl("xlsx")).toBe("http://localhost:8000/export/xlsx");
+    expect(exportUrl("csv")).toBe(process.env.NEXT_PUBLIC_API_BASE_URL+"/export/csv");
+    expect(exportUrl("xlsx")).toBe(process.env.NEXT_PUBLIC_API_BASE_URL+"/export/xlsx");
   });
 });
