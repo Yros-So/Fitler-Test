@@ -8,6 +8,13 @@ from app.api.routes import api_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.db.init_db import init_db
+from fastapi import Depends
+
+# Modification pour la vérification de la connexion à la base de données
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+from app.db.session import get_db
 
 settings = get_settings()
 
@@ -31,6 +38,7 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix=settings.api_prefix)
+
 
 @app.get("/ready")
 def ready(db: Session = Depends(get_db)):
