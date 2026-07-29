@@ -7,6 +7,9 @@
 		"nodejs_compat",
 		"global_fetch_strictly_public"
 	],
+	"vars": {
+		"NEXT_PUBLIC_API_BASE_URL": "https://fitler-test.onrender.com"
+	},
 	"assets": {
 		"directory": ".open-next/assets",
 		"binding": "ASSETS"
