@@ -31,3 +31,9 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix=settings.api_prefix)
+
+@app.get("/ready")
+def ready():
+    return {
+        "status": "ready"
+    }
