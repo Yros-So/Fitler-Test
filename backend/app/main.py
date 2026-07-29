@@ -33,7 +33,18 @@ app.add_middleware(
 app.include_router(api_router, prefix=settings.api_prefix)
 
 @app.get("/ready")
-def ready():
-    return {
-        "status": "ready"
-    }
+def ready(db: Session = Depends(get_db)):
+    try:
+        db.execute(text("SELECT 1"))
+
+        return {
+            "status": "ready",
+            "database": "connected",
+        }
+
+    except Exception as exc:
+        return {
+            "status": "not_ready",
+            "database": "error",
+            "detail": str(exc),
+        }
