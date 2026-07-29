@@ -19,8 +19,8 @@ services:
     build:
       context: ../backend
     environment:
-      SCRAPER_DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/shopify_scraper
-      SCRAPER_ALLOWED_ORIGINS: '["http://localhost:3000"]'
+      DATABASE_URL: postgresql://neondb_owner:npg_AnN8Ebd7upSC@ep-weathered-star-ay82lbbz.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+      SCRAPER_ALLOWED_ORIGINS: '["https://fitler-test.ibra-so-sow.workers.dev/scraper"]'
       SCRAPER_AUTO_CREATE_TABLES: "true"
     ports:
       - "8000:8000"
