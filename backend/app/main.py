@@ -11,10 +11,11 @@ from app.db.init_db import init_db
 from fastapi import Depends
 
 # Modification pour la vérification de la connexion à la base de données
+from fastapi import Depends
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.db.session import get_db
+from app.db.session import get_session
 
 settings = get_settings()
 
@@ -41,18 +42,16 @@ app.include_router(api_router, prefix=settings.api_prefix)
 
 
 @app.get("/ready")
-def ready(db: Session = Depends(get_db)):
+def ready(session: Session = Depends(get_session)):
     try:
-        db.execute(text("SELECT 1"))
-
+        session.execute(text("SELECT 1"))
         return {
             "status": "ready",
             "database": "connected",
         }
 
-    except Exception as exc:
+    except Exception:
         return {
             "status": "not_ready",
-            "database": "error",
-            "detail": str(exc),
+            "database": "disconnected",
         }
