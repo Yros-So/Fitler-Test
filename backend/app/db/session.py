@@ -9,19 +9,25 @@ settings = get_settings()
 
 
 def _resolve_db_url(url: str) -> str:
-    if url.startswith("postgresql://") or url.startswith("postgres://"):
-        return url.replace("postgresql://", "postgresql+psycopg://", 1).replace("postgres://", "postgresql+psycopg://", 1)
+    for prefix in ("postgresql://", "postgres://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url[len(prefix):]
     return url
 
 
 _db_url = _resolve_db_url(settings.database_url)
 
-connect_args = {"check_same_thread": False} if _db_url.startswith("sqlite") else {}
+if _db_url.startswith("sqlite"):
+    connect_args: dict = {"check_same_thread": False}
+else:
+    connect_args = {"sslmode": "require"}
 
 engine = create_engine(
     _db_url,
     connect_args=connect_args,
     pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=10,
 )
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
