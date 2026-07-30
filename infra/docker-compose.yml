@@ -3,8 +3,8 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: shopify_scraper
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
       - "5432:5432"
     volumes:
@@ -19,8 +19,8 @@ services:
     build:
       context: ../backend
     environment:
-      DATABASE_URL: postgresql://neondb_owner:npg_AnN8Ebd7upSC@ep-weathered-star-ay82lbbz.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
-      SCRAPER_ALLOWED_ORIGINS: '["https://fitler-test.ibra-so-sow.workers.dev/scraper"]'
+      SCRAPER_DATABASE_URL: ${SCRAPER_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/shopify_scraper}
+      SCRAPER_ALLOWED_ORIGINS: ${SCRAPER_ALLOWED_ORIGINS:-'["http://localhost:3000"]'}
       SCRAPER_AUTO_CREATE_TABLES: "true"
     ports:
       - "8000:8000"
@@ -32,7 +32,7 @@ services:
     build:
       context: ../frontend
     environment:
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
     ports:
       - "3000:3000"
     depends_on:
