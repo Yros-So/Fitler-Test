@@ -7,14 +7,19 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
-connect_args = (
-    {"check_same_thread": False}
-    if settings.database_url.startswith("sqlite")
-    else {}
-)
+
+def _resolve_db_url(url: str) -> str:
+    if url.startswith("postgresql://") or url.startswith("postgres://"):
+        return url.replace("postgresql://", "postgresql+psycopg://", 1).replace("postgres://", "postgresql+psycopg://", 1)
+    return url
+
+
+_db_url = _resolve_db_url(settings.database_url)
+
+connect_args = {"check_same_thread": False} if _db_url.startswith("sqlite") else {}
 
 engine = create_engine(
-    settings.database_url,
+    _db_url,
     connect_args=connect_args,
     pool_pre_ping=True,
 )
