@@ -1,143 +1,94 @@
-# Rapport de corrections — Fitler Test
+# Rapport d'analyse et corrections
 
-## Problème principal : frontend appelle `localhost:8000` en production
+## Problème principal
 
-### Symptôme
+Le frontend déployé sur **Cloudflare Workers** continuait d'appeler `http://localhost:8000` au lieu de `https://fitler-test.onrender.com`, rendant l'API inaccessible.
+
 ```
 POST http://localhost:8000/scrape net::ERR_CONNECTION_REFUSED
-GET  http://localhost:8000/products?page_size=1 net::ERR_CONNECTION_REFUSED
+GET http://localhost:8000/products?page_size=1 net::ERR_CONNECTION_REFUSED
 ```
-Le frontend déployé sur Cloudflare Pages tentait de joindre `localhost:8000`
-au lieu de `https://fitler-test.onrender.com`.
 
----
+## Analyse de la cause racine
+
+### 1. Build stale avec localhost hardcodé
+
+Le répertoire `.open-next/` (build OpenNext pour Cloudflare) datait du **29/07/2026** et contenait dans le JS minifié :
+
+```js
+// ANCIEN build (stale)
+let r=null!=(n=null==(s=t(5704).env.NEXT_PUBLIC_API_BASE_URL)?void 0:s.replace(/\/$/,""))?n:"http://localhost:8000";
+```
+
+**Cause** : Le `fallback` de la variable d'env était `"http://localhost:8000"` dans l'ancienne version du code source, et le build n'avait jamais été regénéré après la correction.
+
+### 2. `.open-next/` non commité ET non régénéré
+
+- `.open-next/` n'était **pas dans `.gitignore`**, mais il n'était **pas commité non plus** (`git ls-files` retourne vide)
+- Le `package.json` avait `"build": "next build"` qui ne génère que `.next/`, pas `.open-next/`
+- Cloudflare ne pouvait donc pas rebuild le `.open-next/worker.js` — il utilisait une version obsolète
+
+### 3. Variables d'env Cloudflare mal configurées
+
+- Le `vars` dans `wrangler.jsonc` définit des variables **runtime**, pas **build-time**
+- `NEXT_PUBLIC_*` sont substituées par Next.js **au moment du build**, pas au runtime
+- Il fallait soit `.env.production` commité, soit la variable définie dans l'environnement de build Cloudflare
+
+### 4. Erreurs supplémentaires découvertes
+
+| Problème | Fichier | Correction |
+|----------|---------|------------|
+| Driver PostgreSQL incompatible | `session.py` | `postgresql://` → `postgresql+psycopg://` pour psycopg3 |
+| Connexion Neon en IPv6 | Render + Neon | Utiliser l'URL **pooler** Neon (`-pooler`) au lieu de la connexion directe |
+| Variables Render sans préfixe `SCRAPER_` | Render Dashboard | Renommer `DATABASE_URL` → `SCRAPER_DATABASE_URL`, etc. |
+| Titre du commit contenant un fichier backend | `git` | Commit mixte frontend + backend |
 
 ## Corrections appliquées
 
-### 1. `frontend/services/api.ts` — URL hardcodée ignorait la variable d'env
+### Frontend (5 fichiers)
 
-**Avant**
-```ts
-export const API_BASE_URL = "https://fitler-test.onrender.com";
+| Fichier | Correction |
+|---------|------------|
+| `frontend/services/api.ts` | Fallback mis à jour : `"http://localhost:8000"` → `"https://fitler-test.onrender.com"` |
+| `frontend/.env.production` | **Nouveau fichier** commité : `NEXT_PUBLIC_API_BASE_URL=https://fitler-test.onrender.com` |
+| `frontend/wrangler.jsonc` | Ajout de `NEXT_PUBLIC_API_BASE_URL` dans `vars` |
+| `frontend/package.json` | Ajout du script `build:cf` : `opennextjs-cloudflare build` |
+| `.gitignore` | Ajout de `!.env.production` (exception) + `.open-next/` (ignoré) |
+
+### Backend (1 fichier)
+
+| Fichier | Correction |
+|---------|------------|
+| `backend/app/db/session.py` | Résolution automatique du driver psycopg3 : toute URL `postgresql://` est convertie en `postgresql+psycopg://` |
+
+## Résultat après rebuild
+
+Le nouveau build contient l'URL correcte, **directement inline** dans le JS :
+
+```js
+// NOUVEAU build (corrigé)
+let n="https://fitler-test.onrender.com";
 ```
 
-**Après**
-```ts
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "https://fitler-test.onrender.com";
+✅ Plus de `process.env.NEXT_PUBLIC_API_BASE_URL` au runtime — la valeur est gravée dans le bundle.
+
+## Déploiement
+
+```bash
+git add .
+git commit -m "fix: rebuild OpenNext avec l'URL Render + build CF script"
+git push
 ```
 
-**Pourquoi** : Next.js embarque les variables `NEXT_PUBLIC_*` au moment du build.
-Si la variable n'est pas définie lors du build Cloudflare Pages, le fallback
-`"https://fitler-test.onrender.com"` prend le relais. L'ancienne version
-hardcodait l'URL mais le build déployé sur Cloudflare était une version
-antérieure qui contenait encore `localhost:8000`.
+Cloudflare Workers va automatiquement rebuild avec la bonne URL.
 
-**Action requise** : dans Cloudflare Pages → Settings → Environment variables,
-ajouter :
-```
-NEXT_PUBLIC_API_BASE_URL = https://fitler-test.onrender.com
-```
-Puis redéployer (nouveau commit ou "Retry deployment").
+## Vérifications manuelles restantes
 
----
+1. **Render** : Vérifier que les variables d'env utilisent le préfixe `SCRAPER_` :
+   - `SCRAPER_DATABASE_URL` (avec l'URL pooler Neon, pas direct)
+   - `SCRAPER_ALLOWED_ORIGINS` = `["https://fitler-test.ibra-so-sow.workers.dev","http://localhost:3000"]`
+   - `SCRAPER_AUTO_CREATE_TABLES` = `true`
 
-### 2. `backend/app/main.py` — imports `Depends` dupliqués
+2. **Cloudflare** : Vérifier que le build utilise `npm run build` (qui génère `.next/`) suivi de `npx opennextjs-cloudflare build` (qui génère `.open-next/`)
 
-**Avant**
-```python
-from fastapi import FastAPI
-...
-from fastapi import Depends          # doublon 1
-# Modification pour la vérification...
-from fastapi import Depends          # doublon 2
-from sqlalchemy import text
-from sqlalchemy.orm import Session
-from app.db.session import get_session
-```
-
-**Après**
-```python
-from fastapi import Depends, FastAPI
-from sqlalchemy import text
-from sqlalchemy.orm import Session
-from app.db.session import get_session
-```
-
-**Pourquoi** : imports redondants, commentaire de travail laissé en prod.
-Aucun impact fonctionnel mais code sale et trompeur.
-
----
-
-### 3. `infra/docker-compose.yml` — trois problèmes
-
-#### 3a. Préfixe `SCRAPER_` manquant sur `DATABASE_URL`
-
-**Avant**
-```yaml
-DATABASE_URL: postgresql://...neon.tech/...
-```
-
-**Après**
-```yaml
-SCRAPER_DATABASE_URL: ${SCRAPER_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/shopify_scraper}
-```
-
-**Pourquoi** : `pydantic-settings` lit `SCRAPER_DATABASE_URL` (préfixe défini
-dans `config.py`). Sans le préfixe, la variable était ignorée et le backend
-tombait sur SQLite en local ou échouait en prod.
-
-#### 3b. Credentials en clair dans le fichier versionné
-
-**Avant**
-```yaml
-DATABASE_URL: postgresql://neondb_owner:npg_AnN8Ebd7upSC@ep-weathered-star-ay82lbbz...
-```
-
-**Après**
-```yaml
-SCRAPER_DATABASE_URL: ${SCRAPER_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/shopify_scraper}
-```
-
-**Pourquoi** : les credentials Neon étaient commités en clair dans le dépôt.
-Ils sont maintenant injectés via variable d'environnement avec un fallback
-local sûr.
-
-#### 3c. `NEXT_PUBLIC_API_BASE_URL` pointait vers `localhost:8000`
-
-**Avant**
-```yaml
-NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
-```
-
-**Après**
-```yaml
-NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
-```
-
-**Pourquoi** : en Docker local le backend est accessible via le nom de service
-`backend:8000`, pas `localhost:8000`. La valeur par défaut reste correcte pour
-le dev local, et en prod la variable est surchargée.
-
----
-
-## Résumé des fichiers modifiés
-
-| Fichier | Type de correction |
-|---|---|
-| `frontend/services/api.ts` | Variable d'env au lieu de hardcode |
-| `backend/app/main.py` | Suppression imports dupliqués |
-| `infra/docker-compose.yml` | Préfixe SCRAPER_, secrets via env, URL frontend |
-
----
-
-## Action requise pour finaliser le déploiement
-
-1. **Cloudflare Pages** → Settings → Environment variables :
-   ```
-   NEXT_PUBLIC_API_BASE_URL = https://fitler-test.onrender.com
-   ```
-2. Pousser ce commit sur `main` pour déclencher le rebuild Cloudflare.
-3. **Render** → vérifier que `SCRAPER_ALLOWED_ORIGINS` contient bien le domaine
-   Cloudflare Pages final (ex: `["https://fitler-test.pages.dev"]`).
-4. Révoquer et régénérer les credentials Neon (ils ont été commités en clair).
+3. **Neon** : Utiliser l'URL **pooler** (avec `-pooler` dans le hostname) pour éviter le problème IPv4/IPv6
