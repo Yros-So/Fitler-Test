@@ -14,8 +14,8 @@ class Settings(BaseSettings):
     request_retries: int = 3
     max_shopify_pages: int = 10
     user_agent: str = (
-        "Mozilla/5.0 (compatible; FitlerScraper/1.0; "
-        "+https://github.com/Yros-So/Fitler-Test)"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
     )
     public_base_url: AnyHttpUrl | None = None
 

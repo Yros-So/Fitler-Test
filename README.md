@@ -1,4 +1,4 @@
-# Fitler-Test
+# Shopify Catalog Extractor
 
 Application full stack pour extraire les produits et les guides de taille depuis des boutiques Shopify.
 
