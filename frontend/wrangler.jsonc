@@ -2,6 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "main": ".open-next/worker.js",
   "name": "fitler-test",
+  "account_id": "5a2caa849582557dd53552750a004471",
   "compatibility_date": "2026-07-29",
   "compatibility_flags": [
     "nodejs_compat",

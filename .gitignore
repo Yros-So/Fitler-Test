@@ -14,6 +14,8 @@ dev.db
 # Node / Next.js
 node_modules/
 .next/
+.open-next/
+.wrangler/
 out/
 coverage/
 *.tsbuildinfo
