@@ -8,6 +8,8 @@ from app.core.errors import FetchError
 
 
 def normalize_shop_url(url: str) -> str:
+    # Normalise l'URL saisie (ajout de https:// si absent, suppression du
+    # slash final) pour servir de clé stable en base et d'URL de requête.
     parsed = urlparse(url if "://" in url else f"https://{url}")
     if not parsed.netloc:
         raise FetchError(f"Invalid URL: {url}")
@@ -15,6 +17,8 @@ def normalize_shop_url(url: str) -> str:
 
 
 class HttpFetcher:
+    """Client HTTP partagé par toutes les stratégies de scraping."""
+
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
@@ -22,6 +26,7 @@ class HttpFetcher:
         return httpx.Client(
             follow_redirects=True,
             timeout=self.settings.request_timeout_seconds,
+            # User-Agent réaliste : évite d'être bloqué en tant que bot.
             headers={"User-Agent": self.settings.user_agent},
         )
 
@@ -32,11 +37,14 @@ class HttpFetcher:
         reraise=True,
     )
     def get(self, client: httpx.Client, url: str) -> httpx.Response:
+        # Récupère une page avec retry exponentiel en cas de timeout/réseau,
+        # ce qui rend le scraper robuste aux baisses de connectivité.
         try:
             response = client.get(url)
             response.raise_for_status()
             return response
         except httpx.HTTPStatusError as exc:
+            # 4xx/5xx : levée dédiée, rattrapée par la stratégie appelante.
             raise FetchError(f"HTTP {exc.response.status_code} for {url}") from exc
         except httpx.HTTPError as exc:
             raise FetchError(f"Failed to fetch {url}: {exc}") from exc

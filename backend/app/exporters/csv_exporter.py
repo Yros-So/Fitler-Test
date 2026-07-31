@@ -5,6 +5,7 @@ from app.models.product import Product
 
 
 def products_to_csv(products: list[Product]) -> bytes:
+    """Export tabulaire : une ligne par variante (produit dénormalisé)."""
     buffer = StringIO()
     writer = csv.DictWriter(
         buffer,
@@ -41,4 +42,5 @@ def products_to_csv(products: list[Product]) -> bytes:
                     "available": variant.available if variant else "",
                 }
             )
+    # BOM UTF-8 : indispensable pour ouvrir le CSV dans Excel avec les accents.
     return buffer.getvalue().encode("utf-8-sig")

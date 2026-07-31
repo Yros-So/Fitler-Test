@@ -14,5 +14,6 @@ def list_size_guides(
     page_size: int = Query(default=25, ge=1, le=100),
     session: Session = Depends(get_session),
 ) -> SizeGuideListResponse:
+    # Liste paginée des guides de taille extraits (tables normalisées).
     items, total = CatalogService(session).list_size_guides(page, page_size)
     return SizeGuideListResponse(items=items, total=total, page=page, page_size=page_size)

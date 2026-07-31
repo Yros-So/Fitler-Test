@@ -7,6 +7,8 @@ from app.db.base import Base, TimestampMixin
 
 
 class SizeGuide(TimestampMixin, Base):
+    """Guide de taille extrait (tables JSON + texte brut associé)."""
+
     __tablename__ = "size_guides"
 
     id: Mapped[str] = mapped_column(

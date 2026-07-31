@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { exportUrl } from "@/services/api";
 
+// Les trois formats d'export proposés par la plateforme.
 const formats = [
   {
     format: "json" as const,

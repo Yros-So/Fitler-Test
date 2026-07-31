@@ -7,6 +7,8 @@ from app.models.website import Website
 
 
 def canonical_url(url: str) -> str:
+    # URL canonique : schéma par défaut https, domaine en minuscules,
+    # pas de slash final. Garantit qu'une même boutique est unique en base.
     parsed = urlparse(url if "://" in url else f"https://{url}")
     scheme = parsed.scheme or "https"
     netloc = parsed.netloc.lower()
@@ -19,6 +21,8 @@ class WebsiteRepository:
         self.session = session
 
     def get_or_create(self, url: str) -> Website:
+        # Récupère la boutique si déjà connue, sinon la crée (et l'ajoute
+        # à la session pour être persistée par l'appelant).
         normalized = canonical_url(url)
         website = self.session.scalar(select(Website).where(Website.url == normalized))
         if website:

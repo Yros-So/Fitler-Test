@@ -5,10 +5,13 @@ import type {
   SizeGuideListResponse
 } from "@/types";
 
+// URL du backend. En production (build Cloudflare), la variable est figée
+// au moment du build ; en local, elle pointe vers le backend Render.
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "https://fitler-test.onrender.com";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // Wrapper fetch générique : sérialisation JSON, gestion des erreurs HTTP.
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: {
@@ -18,12 +21,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
+    // Lève une erreur explicite (corps de l'erreur FastAPI si disponible).
     const detail = await response.text();
     throw new Error(detail || `API error ${response.status}`);
   }
 
   return response.json() as Promise<T>;
 }
+
+// --- Endpoints consommés par l'interface --------------------------------
 
 export function scrapeWebsite(url: string): Promise<{ job_id: string }> {
   return request("/scrape", {
@@ -46,6 +52,7 @@ export function getProducts(params: {
   page_size?: number;
   sort?: string;
 }): Promise<ProductListResponse> {
+  // Construit la query string à partir des paramètres définis.
   const query = new URLSearchParams();
   if (params.search) query.set("search", params.search);
   if (params.page) query.set("page", String(params.page));
@@ -69,5 +76,6 @@ export function getSizeGuides(params: {
 }
 
 export function exportUrl(format: "json" | "csv" | "xlsx") {
+  // URL directe de téléchargement (simple lien <a>).
   return `${API_BASE_URL}/export/${format}`;
 }

@@ -8,8 +8,12 @@ from app.db.base import Base, TimestampMixin
 
 
 class Product(TimestampMixin, Base):
+    """Produit extrait d'une boutique (normalisé par handle + boutique)."""
+
     __tablename__ = "products"
     __table_args__ = (
+        # Un même handle ne peut exister qu'une fois par boutique :
+        # c'est la clé d'upsert utilisée lors de la persistance.
         UniqueConstraint("website_id", "handle", name="uq_products_website_handle"),
     )
 
@@ -39,6 +43,8 @@ class Product(TimestampMixin, Base):
 
 
 class ProductVariant(TimestampMixin, Base):
+    """Déclinaison d'un produit (taille, couleur, etc.) avec prix et stock."""
+
     __tablename__ = "variants"
 
     id: Mapped[str] = mapped_column(

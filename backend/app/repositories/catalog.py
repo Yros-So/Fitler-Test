@@ -9,6 +9,8 @@ from app.scraper.types import ScrapeResult, ScrapedProduct, ScrapedSizeGuide
 
 
 def _decimal_or_none(value: str | int | float | Decimal | None) -> Decimal | None:
+    # Conversion sûre en Decimal pour les colonnes Numeric (prix) :
+    # toute valeur non convertible devient NULL.
     if value is None or value == "":
         return None
     try:
@@ -18,6 +20,8 @@ def _decimal_or_none(value: str | int | float | Decimal | None) -> Decimal | Non
 
 
 class CatalogRepository:
+    """Accès en lecture/écriture au catalogue produits et guides de taille."""
+
     def __init__(self, session: Session) -> None:
         self.session = session
 
@@ -29,6 +33,7 @@ class CatalogRepository:
         page_size: int = 25,
         sort: str = "name",
     ) -> tuple[list[Product], int]:
+        # Requête paginée + recherche insensible à la casse + tri.
         statement = select(Product).options(selectinload(Product.variants))
         count_statement = select(func.count(Product.id))
 
@@ -42,6 +47,8 @@ class CatalogRepository:
             statement = statement.where(criteria)
             count_statement = count_statement.where(criteria)
 
+        # Tri sécurisé : colonne choisie depuis un dictionnaire fermé
+        # (jamais une valeur arbitraire de l'utilisateur).
         sort_column = {
             "name": Product.name,
             "price": Product.price,
@@ -55,6 +62,7 @@ class CatalogRepository:
         return list(items), total
 
     def get_product(self, product_id: str) -> Product | None:
+        # Fiche produit détaillée : variantes + guides associés chargés.
         return self.session.scalar(
             select(Product)
             .where(Product.id == product_id)
@@ -77,14 +85,18 @@ class CatalogRepository:
         return list(items), total
 
     def persist_result(self, website_id: str, result: ScrapeResult) -> dict:
+        """Écrit le résultat d'un scraping en base (remplace les données
+        existantes de la boutique par les plus récentes)."""
         products_written = 0
         variants_written = 0
         guides_written = 0
 
         for scraped in result.products:
+            # Upsert par (website_id, handle) : met à jour ou crée le produit.
             product = self._upsert_product(website_id, scraped)
             products_written += 1
             variants_written += len(scraped.variants)
+            # Variantes recréées à chaque run (source de vérité = scraping).
             self.session.execute(delete(ProductVariant).where(ProductVariant.product_id == product.id))
             for variant in scraped.variants:
                 self.session.add(
@@ -99,6 +111,7 @@ class CatalogRepository:
                     )
                 )
 
+        # Guides de taille remplacés eux aussi pour refléter le dernier scan.
         self.session.execute(delete(SizeGuide).where(SizeGuide.website_id == website_id))
         for guide in result.size_guides:
             self.session.add(self._build_size_guide(website_id, guide))
@@ -119,6 +132,7 @@ class CatalogRepository:
             )
         )
         if product is None:
+            # Nouveau produit : on initialise l'identifiant métier (handle).
             product = Product(
                 website_id=website_id,
                 handle=scraped.handle,
@@ -127,6 +141,7 @@ class CatalogRepository:
             )
             self.session.add(product)
 
+        # Mise à jour de toutes les données extraites.
         product.external_id = scraped.external_id
         product.name = scraped.name
         product.price = _decimal_or_none(scraped.price)
@@ -140,6 +155,7 @@ class CatalogRepository:
         return product
 
     def _build_size_guide(self, website_id: str, guide: ScrapedSizeGuide) -> SizeGuide:
+        # Les tableaux et métadonnées du guide sont stockés en JSON.
         return SizeGuide(
             website_id=website_id,
             product_id=None,

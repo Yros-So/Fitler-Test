@@ -4,6 +4,8 @@ from app.repositories.catalog import CatalogRepository
 
 
 class CatalogService:
+    """Façade d'accès au catalogue : délègue les requêtes au repository."""
+
     def __init__(self, session: Session) -> None:
         self.repository = CatalogRepository(session)
 

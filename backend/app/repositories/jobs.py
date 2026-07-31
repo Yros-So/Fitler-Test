@@ -8,10 +8,13 @@ from app.models.website import Website
 
 
 class JobRepository:
+    """Suivi des jobs de scraping : création et transitions de statut."""
+
     def __init__(self, session: Session) -> None:
         self.session = session
 
     def create(self, website: Website) -> ScrapeJob:
+        # Nouveau job à l'état "pending", exécuté ensuite en arrière-plan.
         job = ScrapeJob(website_id=website.id, status="pending", stats={})
         self.session.add(job)
         self.session.flush()
@@ -21,6 +24,7 @@ class JobRepository:
         return self.session.scalar(select(ScrapeJob).where(ScrapeJob.id == job_id))
 
     def latest(self) -> ScrapeJob | None:
+        # Dernier job (dashboard) : tri par date de création décroissante.
         return self.session.scalar(
             select(ScrapeJob).order_by(ScrapeJob.created_at.desc()).limit(1)
         )
@@ -38,6 +42,7 @@ class JobRepository:
         self.session.flush()
 
     def mark_failed(self, job: ScrapeJob, error: str) -> None:
+        # Conserve le message d'erreur pour le diagnostic dans l'UI.
         job.status = "failed"
         job.finished_at = datetime.now(UTC)
         job.error = error

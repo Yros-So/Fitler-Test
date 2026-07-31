@@ -16,12 +16,14 @@ import { Progress } from "@/components/ui/progress";
 import { useJobPolling } from "@/hooks/use-job-polling";
 import { scrapeWebsite } from "@/services/api";
 
+// Schéma de validation du formulaire (zod) : URL obligatoire et valide.
 const formSchema = z.object({
   url: z.string().url("Saisis une URL valide, par exemple https://www.andre.fr")
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
+// Progression affichée selon le statut du job (indicateur visuel).
 const progressByStatus = {
   pending: 20,
   running: 70,
@@ -39,10 +41,12 @@ export function ScrapeForm() {
     resolver: zodResolver(formSchema),
     defaultValues: { url: "" }
   });
+  // Polling du job en arrière-plan une fois le scraping lancé.
   const jobQuery = useJobPolling(jobId);
   const job = jobQuery.data;
 
   async function onSubmit(values: FormValues) {
+    // Envoie l'URL au backend : réponse immédiate avec l'id du job.
     const created = await scrapeWebsite(values.url);
     setJobId(created.job_id);
     toast.success("Scraping lancé");
@@ -109,6 +113,7 @@ export function ScrapeForm() {
                 </div>
                 <Progress value={progressByStatus[job.status]} />
                 {job.status === "completed" ? (
+                  // Récapitulatif du job terminé : volumes écrits en base.
                   <div className="grid gap-2 text-sm sm:grid-cols-3">
                     <Result label="Produits" value={job.stats.products ?? 0} />
                     <Result label="Variantes" value={job.stats.variants ?? 0} />
@@ -116,6 +121,7 @@ export function ScrapeForm() {
                   </div>
                 ) : null}
                 {job.status === "failed" ? (
+                  // Message d'erreur remonté par le backend (diagnostic).
                   <Alert className="border-destructive/40">
                     <AlertTitle>Scraping en échec</AlertTitle>
                     <AlertDescription>{job.error}</AlertDescription>

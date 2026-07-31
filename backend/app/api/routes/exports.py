@@ -27,6 +27,8 @@ def export_xlsx(session: Session = Depends(get_session)) -> Response:
 
 
 def _download(payload: bytes, media_type: str, filename: str) -> Response:
+    # Réponse de téléchargement : le header Content-Disposition force le
+    # navigateur à enregistrer le fichier plutôt qu'à l'afficher.
     return Response(
         payload,
         media_type=media_type,

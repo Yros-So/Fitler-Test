@@ -11,6 +11,13 @@ from app.scraper.types import ScrapedProduct, ScrapedVariant
 
 
 class HTMLStrategy:
+    """Stratégie de repli 100 % HTML.
+
+    S'applique aux boutiques sans API ni JSON exploitable : on récupère
+    d'abord les données produits des balises JSON-LD (schema.org), sinon on
+    liste les liens vers les fiches produits du catalogue.
+    """
+
     name = "html"
 
     def __init__(self, settings: Settings, fetcher: HttpFetcher | None = None) -> None:
@@ -28,6 +35,8 @@ class HTMLStrategy:
         return self._product_links(soup, base)
 
     def _json_ld_products(self, soup: BeautifulSoup, base_url: str) -> list[ScrapedProduct]:
+        # JSON-LD (schema.org/Product) : données structurées pour le SEO,
+        # souvent plus riches que le simple HTML visible.
         products: list[ScrapedProduct] = []
         for script in soup.select('script[type="application/ld+json"]'):
             if not script.string:
@@ -38,9 +47,11 @@ class HTMLStrategy:
                 continue
             for product in self._iter_json_ld_products(payload):
                 url = str(product.get("url") or base_url)
+                # Le dernier segment de l'URL = identifiant (handle) produit.
                 handle = url.rstrip("/").split("/")[-1] or str(product.get("sku") or "product")
                 image = product.get("image")
                 images = image if isinstance(image, list) else ([image] if image else [])
+                # "offers" peut être un objet unique ou une liste (prix/stock).
                 offers = product.get("offers") or {}
                 if isinstance(offers, list):
                     offers = offers[0] if offers else {}
@@ -71,6 +82,8 @@ class HTMLStrategy:
         return products
 
     def _product_links(self, soup: BeautifulSoup, base_url: str) -> list[ScrapedProduct]:
+        # Dernier recours : parcourir les ancres "/products/..." de la page
+        # d'accueil pour référencer les fiches produits sans les détailler.
         seen: set[str] = set()
         products: list[ScrapedProduct] = []
         for anchor in soup.select('a[href*="/products/"]'):
@@ -101,6 +114,8 @@ class HTMLStrategy:
         return products
 
     def _iter_json_ld_products(self, payload: dict | list) -> Iterable[dict]:
+        # Traverse le graphe JSON-LD (@graph) et ne retient que les nœuds
+        # typés "Product".
         items = payload if isinstance(payload, list) else [payload]
         for item in items:
             if not isinstance(item, dict):
@@ -116,12 +131,14 @@ class HTMLStrategy:
 
     @staticmethod
     def _brand_name(brand: object) -> str | None:
+        # La marque peut être un objet {"name": ...} ou une simple chaîne.
         if isinstance(brand, dict):
             return brand.get("name")
         return str(brand) if brand else None
 
     @staticmethod
     def _availability(offers: object) -> bool:
+        # "availability": "https://schema.org/InStock" => disponible.
         if not isinstance(offers, dict):
             return False
         availability = str(offers.get("availability") or "").lower()

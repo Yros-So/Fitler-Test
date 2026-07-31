@@ -6,6 +6,7 @@ from app.models.product import Product
 
 
 def products_to_xlsx(products: list[Product]) -> bytes:
+    """Export Excel : une ligne par variante, formatage type contrôle catalogue."""
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "Products"

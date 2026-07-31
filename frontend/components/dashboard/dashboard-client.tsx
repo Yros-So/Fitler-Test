@@ -24,6 +24,7 @@ const statusVariants: Record<ScrapeStatus, "secondary" | "warning" | "success" |
 };
 
 export function DashboardClient() {
+  // Trois requêtes parallèles : total produits, total guides, dernier job.
   const productsQuery = useQuery({
     queryKey: ["dashboard-products"],
     queryFn: () => getProducts({ page_size: 1 })
@@ -103,6 +104,7 @@ export function DashboardClient() {
             <Stat label="Pages produit détectées" value={productsQuery.data?.total ?? 0} />
             <Stat label="Guides normalisés" value={guidesQuery.data?.total ?? 0} />
             <Stat
+              // Couverture guide : % de guides rapportés au catalogue (proxy).
               label="Couverture guide"
               value={
                 productsQuery.data?.total

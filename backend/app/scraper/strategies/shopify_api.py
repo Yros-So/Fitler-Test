@@ -5,6 +5,12 @@ from app.scraper.types import ScrapedProduct, ScrapedVariant
 
 
 class ShopifyAPIStrategy:
+    """Stratégie principale : interroge l'API publique des boutiques Shopify.
+
+    Shopify expose `/products.json` sans authentification : c'est la source
+    la plus fiable et la plus complète (variantes, images, options...).
+    """
+
     name = "shopify_api"
 
     def __init__(self, settings: Settings, fetcher: HttpFetcher | None = None) -> None:
@@ -15,11 +21,15 @@ class ShopifyAPIStrategy:
         base = normalize_shop_url(base_url)
         products: list[ScrapedProduct] = []
         with self.fetcher.client() as client:
+            # Pagination simple via le paramètre ?page= (250 produits max/p).
             for page in range(1, self.settings.max_shopify_pages + 1):
                 endpoint = f"{base}/products.json?limit=250&page={page}"
                 try:
                     response = self.fetcher.get(client, endpoint)
                 except Exception:
+                    # Pas d'API disponible (boutique non-Shopify, blocage) :
+                    # la page 1 échoue => stratégie inutilisable ; sinon on
+                    # considère avoir atteint la fin de la pagination.
                     if page == 1:
                         return []
                     break
@@ -34,9 +44,12 @@ class ShopifyAPIStrategy:
 
     @staticmethod
     def parse_products(products_payload: list[dict], base_url: str) -> list[ScrapedProduct]:
+        """Transforme un lot brut de l'API en objets ScrapedProduct."""
         products: list[ScrapedProduct] = []
         for item in products_payload:
+            # "handle" = identifiant SEO unique du produit (slug d'URL).
             handle = str(item.get("handle") or item.get("id") or "product")
+            # Variantes : déclinaisons (taille, couleur...) avec prix et stock.
             variants = [
                 ScrapedVariant(
                     external_id=str(variant.get("id")) if variant.get("id") is not None else None,
@@ -52,12 +65,14 @@ class ShopifyAPIStrategy:
                 )
                 for variant in item.get("variants", [])
             ]
+            # Prix de référence = prix de la première variante.
             first_price = variants[0].price if variants else item.get("price")
             images = [
                 image.get("src")
                 for image in item.get("images", [])
                 if isinstance(image, dict) and image.get("src")
             ]
+            # La description arrive en HTML : on la convertit en texte simple.
             body_html = item.get("body_html")
             description = (
                 parse_html(body_html).get_text(" ", strip=True)
@@ -65,6 +80,7 @@ class ShopifyAPIStrategy:
                 else None
             )
             tags = item.get("tags") or []
+            # Shopify renvoie parfois une chaîne CSV plutôt qu'une liste.
             if isinstance(tags, str):
                 tags = [tag.strip() for tag in tags.split(",") if tag.strip()]
 

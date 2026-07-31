@@ -2,6 +2,9 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 
+# Structures de données "brutes" produites par le scraper, indépendantes de
+# la base de données. Elles servent d'interface entre les stratégies
+# d'extraction et la couche de persistance (CatalogRepository).
 @dataclass(slots=True)
 class ScrapedVariant:
     external_id: str | None
@@ -43,6 +46,8 @@ class ScrapeResult:
     size_guides: list[ScrapedSizeGuide] = field(default_factory=list)
 
 
+# Protocoles : contrat qu'une stratégie d'extraction doit respecter pour
+# pouvoir être branchée sur le moteur (extensible à d'autres CMS).
 class ProductStrategy(Protocol):
     name: str
 

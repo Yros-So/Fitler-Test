@@ -7,6 +7,8 @@ from app.db.base import Base, TimestampMixin
 
 
 class Website(TimestampMixin, Base):
+    """Boutique en ligne scrapée (URL canonique unique)."""
+
     __tablename__ = "websites"
 
     id: Mapped[str] = mapped_column(

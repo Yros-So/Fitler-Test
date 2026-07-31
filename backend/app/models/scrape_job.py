@@ -8,6 +8,8 @@ from app.db.base import Base, TimestampMixin
 
 
 class ScrapeJob(TimestampMixin, Base):
+    """Job de scraping : statut, erreur et statistiques du dernier run."""
+
     __tablename__ = "scrape_jobs"
 
     id: Mapped[str] = mapped_column(

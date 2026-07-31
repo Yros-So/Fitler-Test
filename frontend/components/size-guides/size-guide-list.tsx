@@ -18,6 +18,7 @@ import {
 import { getSizeGuides } from "@/services/api";
 
 export function SizeGuideList() {
+  // Charge les guides par pages de 50 (volume faible en pratique).
   const guidesQuery = useQuery({
     queryKey: ["size-guides"],
     queryFn: () => getSizeGuides({ page_size: 50 })
@@ -63,6 +64,8 @@ export function SizeGuideList() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {guide.content.tables?.length ? (
+                  // Affiche les premières tables extraites (2 max) et les
+                  // 8 premières lignes de chaque table.
                   guide.content.tables.slice(0, 2).map((table, index) => (
                     <Table key={`${guide.id}-${index}`}>
                       <TableHeader>

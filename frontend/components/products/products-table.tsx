@@ -26,10 +26,13 @@ import type { Product } from "@/types";
 const PAGE_SIZE = 20;
 
 export function ProductsTable() {
+  // État local : recherche, page, tri. La recherche est "debouncée" pour
+  // ne pas marteler l'API à chaque frappe.
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState("name");
   const debouncedSearch = useDebounce(search);
+  // React Query refait la requête dès que la clé change (recherche/page/tri).
   const productsQuery = useQuery({
     queryKey: ["products", debouncedSearch, page, sort],
     queryFn: () =>
@@ -153,6 +156,7 @@ export function ProductsTable() {
 }
 
 function ProductRow({ product }: { product: Product }) {
+  // Nombre de variantes réellement disponibles (badge d'état stock).
   const availableCount = product.variants.filter((variant) => variant.available).length;
   return (
     <TableRow>
