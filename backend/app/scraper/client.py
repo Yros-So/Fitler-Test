@@ -31,7 +31,13 @@ class ShopifyScraper:
 
     def scrape(self, url: str) -> ScrapeResult:
         products = self._scrape_products(url)
-        size_guides = self.size_guide_strategy.scrape(url)
+        try:
+            size_guides = self.size_guide_strategy.scrape(url)
+        except Exception as exc:
+            # L'extraction des guides ne doit jamais faire échouer le job :
+            # les produits restent valides même sans guide détecté.
+            logger.warning("Size guide strategy failed: {}", exc)
+            size_guides = []
         return ScrapeResult(products=products, size_guides=size_guides)
 
     def _scrape_products(self, url: str) -> list[ScrapedProduct]:

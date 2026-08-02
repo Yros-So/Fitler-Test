@@ -32,7 +32,12 @@ class SizeGuideHTMLStrategy:
     def scrape(self, base_url: str) -> list[ScrapedSizeGuide]:
         base = normalize_shop_url(base_url)
         with self.fetcher.client() as client:
-            home = self.fetcher.get(client, base)
+            try:
+                home = self.fetcher.get(client, base)
+            except Exception:
+                # Page d'accueil inaccessible (429/erreur réseau) : on ne
+                # peut rien détecter, on abandonne sans faire échouer le job.
+                return []
             soup = parse_html(home.text)
             # Liens candidats détectés + chemins standard si absents.
             candidate_urls = self._candidate_urls(soup, base)

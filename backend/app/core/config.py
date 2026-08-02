@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     request_timeout_seconds: float = 20.0
     request_retries: int = 3
     max_shopify_pages: int = 10
+    # Proxy HTTP(S) optionnel (SCRAPER_PROXY_URL). Utile depuis une IP de
+    # datacenter (Render) bloquée par certaines boutiques : permet de passer
+    # par une IP de contournement.
+    proxy_url: str | None = None
     # User-Agent réaliste de navigateur : évite que les boutiques
     # bloquent le scraping (une UA de bot déclenche des réponses 403/429).
     user_agent: str = (

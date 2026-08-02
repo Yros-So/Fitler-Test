@@ -1,0 +1,91 @@
+%% =============================================================
+%% 1. Vue d'ensemble - deploiement
+%% =============================================================
+flowchart LR
+    U[Utilisateur] -->|HTTPS| F[Frontend Next.js 15<br/>Cloudflare Workers]
+    F -->|REST JSON| B[Backend FastAPI<br/>Render]
+    B -->|SQL| DB[(PostgreSQL Neon)]
+    B <-->|HTTP + retries| S[<b>Boutiques Shopify</b><br/>andre.fr, grimfrost.com]
+
+%% =============================================================
+%% 2. Flux d'un scraping (sequence)
+%% =============================================================
+sequenceDiagram
+    participant U as Utilisateur
+    participant F as Frontend
+    participant B as Backend FastAPI
+    participant S as Boutique Shopify
+    participant DB as Base de donnees
+
+    U->>F: URL boutique
+    F->>B: POST /scrape
+    B->>DB: creer job (pending)
+    B-->>F: 202 Accepted + job_id
+    B->>B: BackgroundTasks : run_scrape_job
+
+    loop 1..3 strategies
+        B->>S: products.json / JSON / HTML
+        S-->>B: produits + variantes
+    end
+    B->>S: pages guide de taille
+    S-->>B: tables HTML
+
+    B->>DB: upsert produits/variantes/guides
+    B->>DB: job -> completed + stats
+
+    loop toutes les 2 s
+        F->>B: GET /jobs/{job_id}
+        B-->>F: statut job
+    end
+    F-->>U: resultats + dashboard
+
+%% =============================================================
+%% 3. Backend - architecture en couches
+%% =============================================================
+flowchart TD
+    subgraph API[ Couche API - FastAPI ]
+        R1[POST /scrape]
+        R2[GET /jobs/&#123;id&#125;]
+        R3[GET /products]
+        R4[GET /size-guides]
+        R5[GET /export/*]
+    end
+
+    subgraph SRV[ Couche Services ]
+        S1[ScrapeService<br/>cycle de vie jobs]
+        S2[CatalogService<br/>requetes catalogue]
+        S3[ExportService<br/>generation exports]
+    end
+
+    subgraph REPO[ Couche Repositories ]
+        D1[JobRepository]
+        D2[CatalogRepository<br/>upsert produits]
+        D3[WebsiteRepository]
+    end
+
+    subgraph SCR[ Moteur de scraping ]
+        ORCH[ShopifyScraper<br/>orchestrateur]
+        STRAT[Strategies<br/>shopify_api | json | html<br/>+ size_guide]
+        FETCH[HttpFetcher<br/>retries + UA navigateur]
+    end
+
+    subgraph DB[ Couche donnees ]
+        MOD[(Modeles SQLAlchemy<br/>Website / Product / Variant<br/>SizeGuide / ScrapeJob)]
+        DB2[(PostgreSQL / SQLite)]
+    end
+
+    API --> SRV --> REPO --> MOD --> DB2
+    SCR --> FETCH
+    R1 -. lance .-> ORCH
+    ORCH --> STRAT --> FETCH
+    D2 -. persiste .-> SCR
+
+%% =============================================================
+%% 4. Strategie d'extraction : ordre de repli
+%% =============================================================
+flowchart LR
+    A[URL boutique] --> B{/products.json<br/>disponible ?}
+    B -- oui --> C[API Shopify<br/><b>source la plus complete</b><br/>variantes, prix, images]
+    B -- non --> D{JSON injecte<br/>dans les script ?}
+    D -- oui --> E[JSON embarqué<br/>ShopifyAnalytics / Next.js]
+    D -- non --> F[JSON-LD / liens HTML<br/>repli minimal]
