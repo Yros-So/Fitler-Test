@@ -92,3 +92,42 @@ Cloudflare Workers va automatiquement rebuild avec la bonne URL.
 2. **Cloudflare** : Vérifier que le build utilise `npm run build` (qui génère `.next/`) suivi de `npx opennextjs-cloudflare build` (qui génère `.open-next/`)
 
 3. **Neon** : Utiliser l'URL **pooler** (avec `-pooler` dans le hostname) pour éviter le problème IPv4/IPv6
+
+---
+
+## Incident #2 : HTTP 429 sur les scraping en production (02/08/2026)
+
+### Symptôme
+
+Sur Render, les scraping de `kleman-france.com` et `www.andre.fr` échouaient en
+HTTP **429** avec un body `local_rate_limited` et un header `server: cloudflare`.
+
+### Diagnostic
+
+- Le 429 ne venait **pas de l'IP Render** : `curl.exe` et `curl_cffi` passaient en
+  200 depuis la même machine que httpx (qui faisait 429).
+- La cause racine est l'**empreinte TLS (JA3)** : Cloudflare classe httpx/requests
+  comme clients non-navigateurs et renvoie un faux 429 anti-bot.
+- Les réponses Cloudflare portaient `retry-after: 60` → le retry tenacity attendait
+  60 s et dépassait le timeout des jobs.
+
+### Correction (`backend/`)
+
+| Fichier | Correction |
+|---------|------------|
+| `requirements.txt` | `httpx` → `curl_cffi==0.16.0` |
+| `app/scraper/http.py` | Réécrit avec `Session(impersonate="chrome")`, headers navigateur complets, retry tenacity sur erreurs réseau/429, `_retry_wait` plafonné à 20 s (respecte `Retry-After`) |
+| `app/core/errors.py` | Ajout de `RateLimitedError(FetchError)` avec `retry_after` |
+| `app/core/config.py` | Ajout de `proxy_url` optionnel (`SCRAPER_PROXY_URL`) |
+| `app/scraper/client.py` | Erreurs de guide de taille → warning (le job ne échoue plus) |
+| `app/scraper/strategies/size_guide.py` | Home en 429 → `[]` sans échouer le job |
+
+### Résultat vérifié en production (Render)
+
+| Boutique | Produits | Variantes | Guides |
+|----------|----------|-----------|--------|
+| kleman-france.com | 228 | 1 866 | 8 |
+| www.andre.fr | 1 648 | 7 721 | 0 |
+
+Base prod : **2 320 produits** / 10 guides, endpoints `/products`, `/size-guides`,
+`/jobs/latest` OK.

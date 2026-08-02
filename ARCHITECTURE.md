@@ -187,8 +187,11 @@ polling).
 
 ## 7. Choix techniques (à justifier en présentation)
 
-- **Python exigé** : scraper en Python 3.12 (httpx, BeautifulSoup, tenacity),
-  backend FastAPI moderne et typé.
+- **Python exigé** : scraper en Python 3.12 (curl_cffi, BeautifulSoup, tenacity),
+  backend FastAPI moderne et typé. `curl_cffi` en mode `impersonate="chrome"`
+  imite l'empreinte TLS (JA3) d'un navigateur : certains sites derrière
+  Cloudflare rejettent les clients HTTP classiques (httpx/requests) par
+  empreinte, indépendamment de l'IP.
 - **Stratégies plutôt qu'un seul scraper** : couvre la diversité des thèmes
   Shopify et reste **extensible** à d'autres CMS (ajout d'un protocole).
 - **Async `BackgroundTasks`** : réponse `202` immédiate, l'utilisateur n'est
