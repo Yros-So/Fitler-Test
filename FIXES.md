@@ -131,3 +131,46 @@ HTTP **429** avec un body `local_rate_limited` et un header `server: cloudflare`
 
 Base prod : **2 320 produits** / 10 guides, endpoints `/products`, `/size-guides`,
 `/jobs/latest` OK.
+
+---
+
+## Incident #3 : build Cloudflare Workers en échec (04/08/2026)
+
+### Symptôme
+
+Le build de `fitler-test` (Workers & Pages, dépôt `Yros-So/Fitler-Test`, branche
+`main`, racine `/frontend`) échouait à l'étape `npm ci` avec :
+
+```
+npm error code EUSAGE
+npm error `npm ci` can only install packages when your package.json and
+package-lock.json ... are in sync.
+npm error Invalid: lock file's @emnapi/wasi-threads@1.2.1 does not satisfy
+@emnapi/wasi-threads@1.2.3
+npm error Missing: @emnapi/core@1.10.0 from lock file
+```
+
+### Diagnostic
+
+- `package-lock.json` était **désynchronisé** : dépendance transitive
+  `@emnapi/wasi-threads@1.2.1` (via `unrs-resolver`) alors que le graphe exige
+  `1.2.3`, et `@emnapi/core@1.10.0` absent du lock.
+- Cloudflare a mis à jour son npm (≥ 11) qui **valide strictement** la synchro
+  lock ↔ `package.json` ; les builds précédents passaient car l'ancien npm était
+  permissif. Le CI GitHub (`npm install`) ne détecte pas ce problème, d'où des
+  checks verts malgré un build Cloudflare cassé.
+
+### Correction (`frontend/`)
+
+| Fichier | Correction |
+|---------|------------|
+| `package-lock.json` | Régénéré avec `npm install` (emnapi 1.2.3 / core 1.10.0 présents) ; `npm ci --dry-run` OK |
+| `package.json` | Ajout du champ `allowScripts` (`esbuild`, `unrs-resolver`, `workerd`) : politique npm ≥ 11.4 « install scripts » — le `.npmrc` `allow-scripts` est rejeté en install projet, c'est `package.json#allowScripts` qu'il faut |
+
+### À noter
+
+- Le lock généré par opennextjs-cloudflare dans `.open-next/server-functions`
+  hérite du lock racine : la régénération corrige aussi l'install interne.
+- Vérifier dans le dashboard Cloudflare que le build suivant cible le bon SHA
+  (l'intégration GitHub peut rester sur un ancien ref ; un nouveau push force la
+  synchro du webhook).
