@@ -129,3 +129,18 @@ def test_candidate_urls_include_french_pointures() -> None:
     urls = strategy._candidate_urls(BeautifulSoup("<html><body></body></html>", "html.parser"), "https://www.andre.fr")
     assert "https://www.andre.fr/pages/guide-des-pointures" in urls
     assert "https://www.andre.fr/pages/guide-des-tailles" in urls
+
+
+def test_candidate_urls_ignore_pdf_links() -> None:
+    # Un lien "Guide des tailles" pointant vers un PDF ne doit pas être
+    # suivi : pas de tableau HTML exploitable dans un fichier.
+    html = """
+    <html><body>
+      <a href="https://cdn.shopify.com/s/files/GuideDesTailles.pdf">Guide des tailles</a>
+      <a href="/pages/size-guide">Size guide</a>
+    </body></html>
+    """
+    strategy = SizeGuideHTMLStrategy(Settings())
+    urls = strategy._candidate_urls(BeautifulSoup(html, "html.parser"), "https://www.andre.fr")
+    assert not any(u.endswith(".pdf") for u in urls)
+    assert "https://www.andre.fr/pages/size-guide" in urls

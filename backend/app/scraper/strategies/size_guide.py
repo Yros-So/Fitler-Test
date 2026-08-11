@@ -131,7 +131,7 @@ class SizeGuideHTMLStrategy:
             label = " ".join(
                 [anchor.get_text(" ", strip=True), href or "", anchor.get("aria-label") or ""]
             )
-            if href and SIZE_PATTERN.search(label):
+            if href and SIZE_PATTERN.search(label) and not href.lower().endswith(".pdf"):
                 url = urljoin(base_url, href.split("#")[0]).rstrip("/")
                 if url not in urls:
                     urls.append(url)
