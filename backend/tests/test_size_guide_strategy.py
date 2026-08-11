@@ -120,3 +120,12 @@ def test_is_guide_page() -> None:
     assert is_guide_page("N/A", "https://shop.example.com/pages/guide-des-pointures")
     assert not is_guide_page("GUIDE D'ENTRETIEN", "https://shop.example.com/pages/guide-dentretien")
     assert not is_guide_page("Derbies cuir noir", "https://shop.example.com/products/pastani-noir")
+
+
+def test_candidate_urls_include_french_pointures() -> None:
+    # Le chemin canonique /pages/guide-des-pointures (utilisé par andre.fr)
+    # doit être proposé même sans lien détecté sur la page d'accueil.
+    strategy = SizeGuideHTMLStrategy(Settings())
+    urls = strategy._candidate_urls(BeautifulSoup("<html><body></body></html>", "html.parser"), "https://www.andre.fr")
+    assert "https://www.andre.fr/pages/guide-des-pointures" in urls
+    assert "https://www.andre.fr/pages/guide-des-tailles" in urls

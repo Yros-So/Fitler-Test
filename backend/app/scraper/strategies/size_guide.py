@@ -140,7 +140,11 @@ class SizeGuideHTMLStrategy:
             "/pages/size-guide",
             "/pages/sizing-guide",
             "/pages/guide-des-tailles",
+            "/pages/guide-des-pointures",
+            "/pages/guide-pointures",
+            "/pages/guide-de-la-taille",
             "/pages/size-chart",
+            "/pages/taille-guide",
         ]
         for path in common_paths:
             url = urljoin(base_url, path).rstrip("/")
