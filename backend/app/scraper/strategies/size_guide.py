@@ -14,6 +14,12 @@ SIZE_PATTERN = re.compile(
     re.I,
 )
 
+# En-têtes de colonnes typiques d'un tableau de tailles (systèmes de tailles).
+_SIZE_SYSTEM_HEADERS = {
+    "cm", "mm", "in", "inch", "eu", "uk", "us", "fr", "it", "de", "es",
+    "jpn", "jp", "cn", "br", "au", "taille", "pointure",
+}
+
 
 class SizeGuideHTMLStrategy:
     """Détection et extraction des guides de taille.
@@ -84,7 +90,8 @@ class SizeGuideHTMLStrategy:
 
     def extract_tables(self, soup: BeautifulSoup) -> list[list[list[str]]]:
         # Extrait les tableaux HTML et ne garde que ceux qui ressemblent à
-        # une grille de tailles (mots-clés ou unités de mesure).
+        # une grille de tailles (mots-clés, unités de mesure ou en-têtes
+        # de système de taille CM/EU/UK/US).
         tables: list[list[list[str]]] = []
         for table in soup.find_all("table"):
             rows: list[list[str]] = []
@@ -96,7 +103,7 @@ class SizeGuideHTMLStrategy:
                 ]
                 if cells:
                     rows.append(cells)
-            if rows and self._looks_like_size_table(rows):
+            if rows and self._looks_like_size_table(rows, table=table):
                 tables.append(rows)
         return tables
 
@@ -138,13 +145,25 @@ class SizeGuideHTMLStrategy:
         return blocks[:10]
 
     @staticmethod
-    def _looks_like_size_table(rows: list[list[str]]) -> bool:
+    def _looks_like_size_table(rows: list[list[str]], table: Tag | None = None) -> bool:
         # Heuristique : présence d'un mot-clé taille OU d'une unité de
-        # mesure (XS/S/M/L, cm, inch) dans la table.
+        # mesure (XS/S/M/L, cm, inch) dans la table. En complément, une
+        # table dont les cellules portent des attributs data-cm/data-inches
+        # ou dont l'en-tête contient des systèmes de tailles (CM, EU, UK,
+        # US...) est considérée comme une grille de tailles.
+        if table is not None and table.select("td[data-cm], td[data-inches], td[data-size], th[data-unit-heading]"):
+            return True
         flattened = " ".join(cell for row in rows for cell in row)
         has_size_word = bool(SIZE_PATTERN.search(flattened))
         has_measurement = bool(re.search(r"\b(xs|s|m|l|xl|xxl|\d{2,3}\s?cm|\d{1,2}\s?in)\b", flattened, re.I))
-        return has_size_word or has_measurement
+        if has_size_word or has_measurement:
+            return True
+        # Dernière vérification : en-têtes de colonnes de système de taille.
+        header = rows[0] if rows else []
+        size_headers = sum(
+            1 for cell in header if cell.strip(".").lower() in _SIZE_SYSTEM_HEADERS
+        )
+        return size_headers >= 2
 
     @staticmethod
     def _title(soup: BeautifulSoup) -> str:
