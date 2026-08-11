@@ -136,7 +136,7 @@ def test_candidate_urls_ignore_pdf_links() -> None:
     # suivi : pas de tableau HTML exploitable dans un fichier.
     html = """
     <html><body>
-      <a href="https://cdn.shopify.com/s/files/GuideDesTailles.pdf">Guide des tailles</a>
+      <a href="https://cdn.shopify.com/s/files/GuideDesTailles.pdf?v=1645810092">Guide des tailles</a>
       <a href="/pages/size-guide">Size guide</a>
     </body></html>
     """

@@ -1,4 +1,5 @@
 from decimal import Decimal, InvalidOperation
+from urllib.parse import urlparse
 
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session, selectinload
@@ -91,7 +92,7 @@ class CatalogRepository:
     @staticmethod
     def _is_visible_guide(guide: SizeGuide) -> bool:
         # Les PDF (fichiers) ne sont pas des guides exploitables ici.
-        if (guide.source_url or "").lower().endswith(".pdf"):
+        if urlparse(guide.source_url or "").path.lower().endswith(".pdf"):
             return False
         table_count = (guide.content or {}).get("metadata", {}).get("table_count", 0)
         if table_count >= 1:

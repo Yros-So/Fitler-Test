@@ -1,5 +1,5 @@
 import re
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup, Tag
 
@@ -131,7 +131,10 @@ class SizeGuideHTMLStrategy:
             label = " ".join(
                 [anchor.get_text(" ", strip=True), href or "", anchor.get("aria-label") or ""]
             )
-            if href and SIZE_PATTERN.search(label) and not href.lower().endswith(".pdf"):
+            # Un fichier (PDF) ne contient pas de tableau HTML exploitable.
+            if not href or urlparse(href).path.lower().endswith(".pdf"):
+                continue
+            if SIZE_PATTERN.search(label):
                 url = urljoin(base_url, href.split("#")[0]).rstrip("/")
                 if url not in urls:
                     urls.append(url)
