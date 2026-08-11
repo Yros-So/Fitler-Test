@@ -20,6 +20,19 @@ _SIZE_SYSTEM_HEADERS = {
     "jpn", "jp", "cn", "br", "au", "taille", "pointure",
 }
 
+# Titres/URLs de pages explicitement dédiées aux tailles (guide des tailles,
+# size guide, guide des pointures...). Exclut de fait les pages produits,
+# collections, FAQ ou d'entretien qui ne font que mentionner la taille.
+_GUIDE_PAGE_PATTERN = re.compile(
+    r"size[-_ ]?guide|sizing[-_ ]?guide|size[-_ ]?chart|shoe[-_ ]?size|"
+    r"guide[-_ ]?(des?|de)[-_ ]?(tailles?|pointures?)",
+    re.I,
+)
+
+
+def is_guide_page(title: str, source_url: str) -> bool:
+    return bool(_GUIDE_PAGE_PATTERN.search(f"{title} {source_url}"))
+
 
 class SizeGuideHTMLStrategy:
     """Détection et extraction des guides de taille.
@@ -67,14 +80,17 @@ class SizeGuideHTMLStrategy:
         return list(deduped.values())
 
     def parse_page(self, soup: BeautifulSoup, source_url: str) -> ScrapedSizeGuide | None:
-        # Un guide "valide" contient soit des tableaux de mesures, soit un
-        # bloc de texte porteur de mots-clés taille/mesure.
+        # Une page n'est conservée comme guide que si elle présente au moins
+        # un tableau de mesures normalisé, ou si son titre/URL désigne
+        # explicitement une page de tailles (même sans tableau exploitable).
+        # Les pages produits, collections, FAQ et d'entretien qui ne font
+        # que mentionner la taille ne sont pas retenues.
         tables = self.extract_tables(soup)
-        text_blocks = self._size_related_blocks(soup)
-        if not tables and not text_blocks:
+        title = self._title(soup)
+        if not tables and not is_guide_page(title, source_url):
             return None
 
-        title = self._title(soup)
+        text_blocks = self._size_related_blocks(soup)
         text = "\n\n".join(text_blocks)[:6000] if text_blocks else None
         return ScrapedSizeGuide(
             title=title,

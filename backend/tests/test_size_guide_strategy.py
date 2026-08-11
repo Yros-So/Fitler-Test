@@ -1,7 +1,7 @@
 from bs4 import BeautifulSoup
 
 from app.core.config import Settings
-from app.scraper.strategies.size_guide import SizeGuideHTMLStrategy
+from app.scraper.strategies.size_guide import SizeGuideHTMLStrategy, is_guide_page
 
 
 def test_extracts_size_guide_table() -> None:
@@ -57,3 +57,66 @@ def test_extracts_data_cm_inches_table() -> None:
     tables = strategy.extract_tables(BeautifulSoup(html, "html.parser"))
     assert len(tables) == 1
     assert tables[0][1] == ["24.7", "39"]
+
+
+def test_rejects_product_page_without_table() -> None:
+    # Page produit mentionnant la taille mais sans tableau : faux positif,
+    # ne doit plus être enregistrée comme guide.
+    html = """
+    <html>
+      <body>
+        <h1>Derbies cuir noir</h1>
+        <div>Disponible également du 35 au 46.</div>
+        <div>Composition et fabrication</div>
+      </body>
+    </html>
+    """
+    strategy = SizeGuideHTMLStrategy(Settings())
+    guide = strategy.parse_page(BeautifulSoup(html, "html.parser"), "https://shop.example.com/products/pastani-noir")
+    assert guide is None
+
+
+def test_keeps_text_only_guide_page() -> None:
+    # Page explicitement dédiée aux tailles sans tableau exploitable
+    # (mesures en images/blocs) : conservée avec son texte.
+    html = """
+    <html>
+      <body>
+        <h1>Guide des tailles</h1>
+        <div>Mesurez votre pied : posez-le sur une feuille et tracez son contour.</div>
+      </body>
+    </html>
+    """
+    strategy = SizeGuideHTMLStrategy(Settings())
+    guide = strategy.parse_page(BeautifulSoup(html, "html.parser"), "https://shop.example.com/pages/guide-des-tailles")
+    assert guide is not None
+    assert guide.tables == []
+    assert guide.text and "Mesurez" in guide.text
+
+
+def test_keeps_table_anywhere_on_page() -> None:
+    # Un tableau de mesures sur une page produit (ex. guide par produit)
+    # reste toujours conservé.
+    html = """
+    <html>
+      <body>
+        <h1>Derbies cuir noir</h1>
+        <table>
+          <tr><th>EU</th><th>UK</th></tr>
+          <tr><td>39</td><td>6</td></tr>
+        </table>
+      </body>
+    </html>
+    """
+    strategy = SizeGuideHTMLStrategy(Settings())
+    guide = strategy.parse_page(BeautifulSoup(html, "html.parser"), "https://shop.example.com/products/pastani-noir")
+    assert guide is not None
+    assert len(guide.tables) == 1
+
+
+def test_is_guide_page() -> None:
+    assert is_guide_page("Guide des tailles", "https://shop.example.com/pages/x")
+    assert is_guide_page("Size guide", "https://shop.example.com/pages/x")
+    assert is_guide_page("N/A", "https://shop.example.com/pages/guide-des-pointures")
+    assert not is_guide_page("GUIDE D'ENTRETIEN", "https://shop.example.com/pages/guide-dentretien")
+    assert not is_guide_page("Derbies cuir noir", "https://shop.example.com/products/pastani-noir")

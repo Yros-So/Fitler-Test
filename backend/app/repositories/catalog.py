@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models.product import Product, ProductVariant
 from app.models.size_guide import SizeGuide
+from app.scraper.strategies.size_guide import is_guide_page
 from app.scraper.types import ScrapeResult, ScrapedProduct, ScrapedSizeGuide
 
 
@@ -75,14 +76,24 @@ class CatalogRepository:
         page: int = 1,
         page_size: int = 25,
     ) -> tuple[list[SizeGuide], int]:
-        total = self.session.scalar(select(func.count(SizeGuide.id))) or 0
-        items = self.session.scalars(
-            select(SizeGuide)
-            .order_by(SizeGuide.created_at.desc())
-            .offset((page - 1) * page_size)
-            .limit(page_size)
+        # Seuls les guides réellement utilisables sont exposés : ceux qui
+        # ont des tableaux de mesures, ou une page explicitement dédiée aux
+        # tailles. Les faux positifs (produits, collections, FAQ, entretien)
+        # sont masqués sans être supprimés en base.
+        guides = self.session.scalars(
+            select(SizeGuide).order_by(SizeGuide.created_at.desc())
         ).all()
-        return list(items), total
+        visible = [guide for guide in guides if self._is_visible_guide(guide)]
+        total = len(visible)
+        start = (page - 1) * page_size
+        return visible[start : start + page_size], total
+
+    @staticmethod
+    def _is_visible_guide(guide: SizeGuide) -> bool:
+        table_count = (guide.content or {}).get("metadata", {}).get("table_count", 0)
+        if table_count >= 1:
+            return True
+        return is_guide_page(guide.title or "", guide.source_url or "")
 
     def persist_result(self, website_id: str, result: ScrapeResult) -> dict:
         """Écrit le résultat d'un scraping en base (remplace les données

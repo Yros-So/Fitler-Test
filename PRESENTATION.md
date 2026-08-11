@@ -1,12 +1,12 @@
 # Shopify Catalog Extractor — Support de présentation
 
 > Support complet pour la soutenance : trame slide par slide (5–10 min), scénario
-> de démo, chiffres live, difficultés et Q&A anticipé.
+> de démo, chiffres live, difficultés, Q&A anticipé et fiche technique scraping (§9).
 > Captures d'écran de la démo : [`docs/presentation/`](docs/presentation/).
 
 ---
 
-## 1. Infos pratiques
+## 1. Infos pratiques +
 
 | | |
 |---|---|
@@ -15,7 +15,8 @@
 | **Frontend (démo)** | https://fitler-test.ibra-so-sow.workers.dev |
 | **API backend** | https://fitler-test.onrender.com |
 | **Docs API (Swagger)** | https://fitler-test.onrender.com/docs |
-| **Stack** | Next.js 15 / FastAPI (Python 3.12) / PostgreSQL Neon / Cloudflare Workers / Render / GitHub Actions |
+| **Stack** | Next.js 15 / FastAPI (Python 3.12) / Pos
+tgreSQL Neon / Cloudflare Workers / Render / GitHub Actions |
 
 ### Chiffres live (au moment de la soutenance)
 
@@ -126,7 +127,10 @@ guides de taille → export CSV. Terminer sur le Swagger `/docs`.
   (liens produits). Chaque stratégie est une classe indépendante et testable ;
   repli automatique.
 - **Guides de taille** : détection par tables HTML, pages dédiées, accordéons,
-  popups, hooks JS courants ; jamais bloquant pour le job.
+  popups, hooks JS courants ; jamais bloquant pour le job. Filtrage anti-bruit :
+  seule une page avec **tableau de mesures** ou **page explicitement dédiée aux
+  tailles** (guide des tailles / size guide / pointures) est enregistrée — les
+  pages produits, collections, FAQ et d'entretien sont exclues.
 - **`BackgroundTasks`** : réponse `202` immédiate, l'utilisateur n'attend pas les
   appels réseau (remplaçable par un worker sans réécrire l'API).
 - **Tri sécurisé** : `sort` contraint par regex pour ne jamais injecter de
@@ -175,3 +179,54 @@ reste. Les échecs de guides ne font jamais échouer le job.
 Dossier [`docs/presentation/`](docs/presentation/) :
 `01-dashboard`, `02-scrape`, `03-products`, `04-product-detail`,
 `05-size-guides`, `06-exports`, `07-api-docs`.
+
+## 9. Fiche technique — technologies de scraping
+
+### 9.1 Bibliothèques (backend/requirements.txt)
+
+| Techno | Version | Rôle |
+|---|---|---|
+| **curl_cffi** | 0.16.0 | Client HTTP **impersonation TLS (JA3)** de Chrome (`impersonate="chrome"`) pour passer la protection Cloudflare |
+| **BeautifulSoup4** | 4.12.3 | Parsing HTML (parseur **lxml** 5.3.0, fallback `html.parser`) |
+| **tenacity** | 9.0.0 | Retry/backoff : relance erreurs réseau et **429**, respect de `Retry-After` (plafonné 20 s) |
+| **loguru** | 0.7.3 | Logging des stratégies et jobs |
+| Stdlib | json, re, urllib | Extraction JSON embarqué/JSON-LD, regex, `urljoin`/`urlparse` |
+
+### 9.2 Scripts (backend/app/scraper)
+
+```
+client.py           Orchestrateur ShopifyScraper : enchaîne les stratégies, dédup par handle
+http.py             HttpFetcher : session curl_cffi, headers navigateur, retry tenacity
+parsing.py          parse_html() — BeautifulSoup + lxml
+types.py            Dataclasses ScrapedProduct / ScrapedVariant / ScrapedSizeGuide
+strategies/
+  shopify_api.py    /products.json (API publique Shopify, pagination 250/page)   ★ source la plus riche
+  json.py           Données <script> embarquées (ShopifyAnalytics, __NEXT_DATA__/RSC)
+  html.py           JSON-LD schema.org, sinon liens <a href="/products/...">
+  size_guide.py     Guides de taille : liens candidats + chemins canoniques + tables HTML
+                    · tables reconnues : mots-clés taille, unités (XS/S/M/L, cm), en-têtes
+                      CM/EU/UK/US (≥ 2 systèmes) et cellules data-cm / data-inches
+                    · filtrage anti-bruit : table de mesures OU page guide explicite
+```
+`app/core/config.py` : `user_agent`, `max_shopify_pages`, `request_timeout_seconds`, `proxy_url` (optionnel).
+
+### 9.3 Logique d'exécution (client.py)
+
+1. **shopify_api** → si des produits → **stop** (variantes, options, images, SKU complets).
+2. Sinon **json** (thèmes headless / Next.js sans API publique).
+3. Sinon **html** (JSON-LD puis liens produits).
+4. **size_guide** en parallèle, jamais bloquant (429 → `[]`). Ne conserve que les
+   pages avec **tables de mesures** (détection CM/EU/UK/US, `data-cm`/`data-inches`)
+   ou **titre/URL de guide des tailles** — les faux positifs (produits, collections,
+   entretien, FAQ) sont ignorés.
+5. Dédup par **handle** Shopify → upsert idempotent en base (un re-scrap met à jour sans dupliquer).
+
+### 9.4 Résultats réels en prod
+
+| Boutique | Source | Produits |
+|---|---|---|
+| kleman-france.com | shopify_api | 228 |
+| andre.fr | html / JSON-LD | 1 648 |
+| minuitsurterre.com | json | 167 |
+| grimfrost.com | — | 250 |
+| **Total** | | **2 487** + **12 guides** |
